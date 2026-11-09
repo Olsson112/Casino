@@ -283,10 +283,26 @@
     const sel = S.sel.items.includes(it.id) ? ' sel' : '';
     const hint = a.hints.has(it.id) ? ' hint' : '';
     const nw = S.prevTable.size && !S.prevTable.has(it.id) ? ' new' : '';
-    if (it.kind === 'card') return cardHTML(it.card, 'selectable' + sel + hint + nw, 'data-act="item" data-id="' + it.id + '"');
-    const cards = it.cards.map((c) => cardHTML(c)).join('');
-    return '<div class="build' + sel + hint + nw + '" data-act="item" data-id="' + it.id + '" title="Bygge ' + it.value + ' av ' + esc(seatName(it.owner)) + '">' +
-      '<div class="fan">' + cards + '</div><div class="badge c' + it.owner + '">' + (it.locked ? '🔒 ' : '🏗️ ') + it.value + '</div></div>';
+    const last = isLastMove(it) ? ' last' : '';
+    if (it.kind === 'card') return cardHTML(it.card, 'selectable' + sel + hint + nw + last, 'data-act="item" data-id="' + it.id + '"');
+    // Bordskorten underst, det utspelade kortet överst
+    const order = it.cards.slice(1).concat(it.cards.slice(0, 1));
+    const k = order.length - 1;
+    const cards = order.map((c, i) => cardHTML(c, '', 'style="transform:translate(' + i * 13 + 'px,' + i * 15 + 'px)"')).join('');
+    const owner = it.owner === S.view.me ? 'Ditt bygge' : esc(seatName(it.owner)) + 's bygge';
+    return '<div class="build o' + it.owner + sel + hint + nw + last + '" data-act="item" data-id="' + it.id + '" title="Bygge ' + it.value + '">' +
+      '<div class="blabel">' + owner + '</div>' +
+      '<div class="fan" style="width:calc(var(--cw) + ' + k * 13 + 'px);height:calc(var(--cw) * 1.4 + ' + k * 15 + 'px)">' + cards + '</div>' +
+      '<div class="badge c' + it.owner + '">' + (it.locked ? '🔒 ' : '') + it.value + '</div></div>';
+  }
+
+  // Markera vad motståndaren just gjorde
+  function isLastMove(it) {
+    const lm = S.view.lastMove;
+    if (!lm || lm.p === S.view.me) return false;
+    if (lm.type === 'trail') return it.kind === 'card' && it.id === lm.card.id;
+    if (lm.type === 'build') return it.kind === 'build' && it.id === 'b' + lm.seq;
+    return false;
   }
 
   function handTag(c) {
