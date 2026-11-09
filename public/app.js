@@ -61,7 +61,7 @@
       const prevRoom = S.room;
       S.room = m.room; S.you = m.you; S.view = m.view;
       if (prevRoom && prevRoom.code === m.room.code && m.room.seats.length > prevRoom.seats.length) Sound.play('join');
-      if (S.view && (!prev || (prevRoom && prevRoom.status !== 'playing'))) { Sound.play('shuffle'); setTimeout(() => Sound.play('deal', S.view ? S.view.hand.length : 4), 400); }
+      if (S.view && (!prev || (prevRoom && prevRoom.status !== 'playing'))) Sound.play('shuffle');
       onView(prev, S.view);
       history.replaceState(null, '', '?rum=' + S.room.code);
       render(true);
@@ -101,10 +101,12 @@
       S.lastSeq = seq;
     }
     if (prev && v.phase === 'playing') {
-      if (v.round !== prev.round) { Sound.play('shuffle'); setTimeout(() => Sound.play('deal', v.hand.length), 400); }
-      else if (v.hand.length > prev.hand.length) setTimeout(() => Sound.play('deal', v.hand.length), moved ? 350 : 0);
+      const newRound = v.round !== prev.round;
+      const newDeal = !newRound && v.hand.length > prev.hand.length;
+      if (newRound) Sound.play('shuffle');
+      else if (newDeal) setTimeout(() => Sound.play('deal', v.hand.length), moved ? 450 : 0);
       const myTurn = v.turn === v.me, wasMine = prev.phase === 'playing' && prev.turn === prev.me && prev.round === v.round;
-      if (myTurn && !wasMine) setTimeout(() => Sound.play('turn'), moved ? 500 : 150);
+      if (myTurn && !wasMine) setTimeout(() => Sound.play('turn'), newDeal || newRound ? 900 : moved ? 450 : 150);
     }
     if (prev && prev.phase === 'playing' && v.phase !== 'playing') {
       setTimeout(() => {

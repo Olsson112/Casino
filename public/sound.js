@@ -85,13 +85,12 @@
 
   const sounds = {
     click() { const c = ready(); if (!c) return; tone(1800, c.currentTime, 0.03, { vol: 0.06, type: 'triangle' }); },
-    select() { const c = ready(); if (!c) return; swish(c.currentTime, 0.6); },
-    trail() { const c = ready(); if (!c) return; const t = c.currentTime; swish(t, 0.8); cardSlap(t + 0.06); },
+    select() { const c = ready(); if (!c) return; tone(1400, c.currentTime, 0.04, { vol: 0.05, type: 'triangle' }); },
+    trail() { const c = ready(); if (!c) return; cardSlap(c.currentTime); },
     capture(n) {
       const c = ready(); if (!c) return;
       const t = c.currentTime;
-      swish(t, 1);
-      cardSlap(t + 0.05, 0.8);
+      cardSlap(t, 0.7);
       const notes = [0, 4, 7, 12, 16];
       const k = Math.max(1, Math.min(notes.length, Math.ceil((n || 2) / 2)));
       for (let i = 0; i < k; i++) tone(N(notes[i]), t + 0.09 + i * 0.06, 0.35, { vol: 0.14, type: 'triangle' });
@@ -128,8 +127,9 @@
     deal(count) {
       const c = ready(); if (!c) return;
       const t = c.currentTime;
-      const k = Math.min(count || 4, 8);
-      for (let i = 0; i < k; i++) { swish(t + i * 0.07, 0.7); cardSlap(t + i * 0.07 + 0.04, 0.4); }
+      // En mjuk, kort "fladdring" – inte en smäll per kort
+      const k = Math.min(count || 4, 4);
+      for (let i = 0; i < k; i++) noise(t + i * 0.06, 0.05, { freq: 2800, sweep: 1600, vol: 0.13, q: 0.9 });
     },
     shuffle() {
       const c = ready(); if (!c) return;
@@ -171,8 +171,20 @@
     },
   };
 
+  const lastPlayed = {};
+  let recent = [];
   window.Sound = {
-    play(name, arg) { try { if (sounds[name]) sounds[name](arg); } catch (e) { /* ljud får aldrig stoppa spelet */ } },
+    play(name, arg) {
+      if (!sounds[name] || document.hidden) return;
+      // Spärra dubbletter och för många ljud på en gång
+      const now = performance.now();
+      if (now - (lastPlayed[name] || 0) < 180) return;
+      recent = recent.filter((x) => now - x < 300);
+      if (recent.length >= 3 && name !== 'tabbe' && name !== 'win' && name !== 'lose') return;
+      lastPlayed[name] = now;
+      recent.push(now);
+      try { sounds[name](arg); } catch (e) { /* ljud får aldrig stoppa spelet */ }
+    },
     isMuted() { return muted; },
     setMuted(m) {
       muted = !!m;
