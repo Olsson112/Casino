@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: kasino
+    runtime: node
+    plan: free
+    buildCommand: "echo inga beroenden"
+    startCommand: node server/index.js
+    healthCheckPath: /healthz
+    autoDeploy: true
