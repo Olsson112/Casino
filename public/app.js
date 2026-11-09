@@ -58,12 +58,16 @@
       }, 250);
     } else if (m.t === 'room') {
       const prev = S.view;
+      const prevRoom = S.room;
       S.room = m.room; S.you = m.you; S.view = m.view;
+      if (prevRoom && prevRoom.code === m.room.code && m.room.seats.length > prevRoom.seats.length) Sound.play('join');
+      if (S.view && (!prev || (prevRoom && prevRoom.status !== 'playing'))) { Sound.play('shuffle'); setTimeout(() => Sound.play('deal', S.view ? S.view.hand.length : 4), 400); }
       onView(prev, S.view);
       history.replaceState(null, '', '?rum=' + S.room.code);
       render(true);
     } else if (m.t === 'error') {
       toast(m.msg, 'err');
+      Sound.play('error');
       if (!S.room) render(true);
     } else if (m.t === 'left' || m.t === 'kicked') {
       S.room = null; S.view = null; S.modal = null; S.sel = { card: null, items: [] };
@@ -72,6 +76,7 @@
       render(true);
     } else if (m.t === 'emote') {
       showEmote(m.seat, m.e);
+      Sound.play('pop');
     }
   }
 
@@ -79,9 +84,33 @@
     if (!v) return;
     const lm = v.lastMove;
     const seq = lm ? lm.seq : null;
+    let moved = false;
     if (seq !== S.lastSeq) {
-      if (lm && S.lastSeq !== null && lm.tabbe) toast('TABBE! ' + v.players[lm.p].name + ' sopade bordet', 'gold');
+      if (lm && S.lastSeq !== null && prev) {
+        moved = true;
+        if (lm.tabbe) { toast('TABBE! ' + v.players[lm.p].name + ' sopade bordet', 'gold'); Sound.play('tabbe'); }
+        if (lm.type === 'trail') Sound.play('trail');
+        else if (lm.type === 'build') Sound.play('build');
+        else if (lm.type === 'capture') {
+          const cards = [lm.card];
+          for (const it of lm.items) cards.push(...it.cards);
+          if (!lm.tabbe) Sound.play('capture', cards.length);
+          if (cards.some((c) => c.r === 1 || R.isLillan(c) || R.isStoran(c))) Sound.play('points');
+        }
+      }
       S.lastSeq = seq;
+    }
+    if (prev && v.phase === 'playing') {
+      if (v.round !== prev.round) { Sound.play('shuffle'); setTimeout(() => Sound.play('deal', v.hand.length), 400); }
+      else if (v.hand.length > prev.hand.length) setTimeout(() => Sound.play('deal', v.hand.length), moved ? 350 : 0);
+      const myTurn = v.turn === v.me, wasMine = prev.phase === 'playing' && prev.turn === prev.me && prev.round === v.round;
+      if (myTurn && !wasMine) setTimeout(() => Sound.play('turn'), moved ? 500 : 150);
+    }
+    if (prev && prev.phase === 'playing' && v.phase !== 'playing') {
+      setTimeout(() => {
+        if (v.phase === 'gameEnd') Sound.play(v.winners && v.winners.includes(v.me) ? 'win' : 'lose');
+        else Sound.play('roundEnd');
+      }, 1400);
     }
     if (v.phase === 'roundEnd' || v.phase === 'gameEnd') {
       if (!prev || prev.phase === 'playing' || prev.round !== v.round) { S.roundEndAt = Date.now() + 1400; setTimeout(() => render(true), 1450); }
@@ -126,6 +155,7 @@
       '<div class="rk">' + rk + '<small>' + sym + '</small></div>' + center +
       '<div class="rk b">' + rk + '<small>' + sym + '</small></div>' + (tag ? '<span class="tag">' + tag + '</span>' : '') + '</div>';
   }
+  const muteBtn = () => '<button class="icon-btn" data-act="mute" title="' + (Sound.isMuted() ? 'Slå på ljud' : 'Stäng av ljud') + '">' + (Sound.isMuted() ? '🔇' : '🔊') + '</button>';
   const backHTML = (cls) => '<div class="card back ' + (cls || '') + '"></div>';
 
   function segHTML(act, options, cur, disabled) {
@@ -143,6 +173,7 @@
   function homeHTML() {
     const demo = [{ s: 'S', r: 2 }, { s: 'D', r: 10 }, { s: 'H', r: 1 }, { s: 'C', r: 13 }];
     return '<div class="screen">' +
+      '<div style="display:flex;justify-content:flex-end;margin-bottom:-52px">' + muteBtn() + '</div>' +
       '<div class="brand"><div class="brand-cards">' + demo.map((c) => cardHTML(c)).join('') + '</div><h1>Kasino</h1><p>Det svenska kortspelet – mot datorn eller med vänner</p></div>' +
       '<div class="panel stack"><h2>Ditt namn</h2><input id="name" class="input" maxlength="16" placeholder="Skriv ditt namn" value="' + esc(S.name) + '" autocomplete="nickname"></div>' +
       '<div class="panel stack"><h2>Spela med vänner</h2>' +
@@ -178,7 +209,7 @@
       }
     }
     return '<div class="screen">' +
-      '<div class="topbar"><button class="icon-btn" data-act="leave" title="Lämna">←</button><div class="title"><b>Lobby</b><span>' + (isHost ? 'Du är värd' : 'Väntar på att värden startar') + '</span></div><button class="icon-btn" data-act="rules">?</button></div>' +
+      '<div class="topbar"><button class="icon-btn" data-act="leave" title="Lämna">←</button><div class="title"><b>Lobby</b><span>' + (isHost ? 'Du är värd' : 'Väntar på att värden startar') + '</span></div>' + muteBtn() + '<button class="icon-btn" data-act="rules">?</button></div>' +
       '<div class="panel room-code"><div class="lbl">Rumskod</div><div class="code">' + r.code + '</div>' +
         '<div class="row"><button class="btn sm" data-act="copy">🔗 Kopiera länk</button>' + (navigator.share ? '<button class="btn sm" data-act="share">📤 Dela</button>' : '') + '</div></div>' +
       '<div class="panel"><h2>Spelare ' + r.seats.length + '/4</h2><div class="seats">' + seats.join('') + '</div></div>' +
@@ -310,7 +341,7 @@
     return '<div class="game">' +
       '<div class="topbar"><button class="icon-btn" data-act="leave" title="Lämna">←</button>' +
         '<div class="title"><b>' + mode.name + '</b><span>Rum ' + S.room.code + ' · Giv ' + v.round + ' · ' + (v.target ? 'Till ' + v.target + ' p' : 'En giv') + (mode.reverse ? ' · minst vinner' : '') + '</span></div>' +
-        '<button class="icon-btn" data-act="rules" title="Regler">?</button></div>' +
+        muteBtn() + '<button class="icon-btn" data-act="rules" title="Regler">?</button></div>' +
       '<div class="opponents">' + opp.join('') + '</div>' +
       '<div class="felt"><div class="felt-head"><span>' + (v.lastCapturer != null ? 'Sist tog: ' + esc(seatName(v.lastCapturer)) : '') + '</span>' +
         '<span class="deck">' + (v.deckCount ? backHTML() + v.deckCount + ' kvar' : 'Leken är slut') + '</span></div>' +
@@ -455,6 +486,7 @@
       const v = S.view;
       if (!v || v.turn !== v.me || v.phase !== 'playing') return;
       S.sel.card = S.sel.card === el.dataset.id ? null : el.dataset.id;
+      if (S.sel.card) Sound.play('select');
       render(true);
     },
     item(el) {
@@ -463,7 +495,7 @@
       const id = el.dataset.id;
       if (!S.sel.card) { toast('Välj först ett kort i handen'); return; }
       const i = S.sel.items.indexOf(id);
-      if (i >= 0) S.sel.items.splice(i, 1); else S.sel.items.push(id);
+      if (i >= 0) S.sel.items.splice(i, 1); else { S.sel.items.push(id); Sound.play('click'); }
       render(true);
     },
     capture() { doMove({ type: 'capture', cardId: S.sel.card, itemIds: S.sel.items.slice() }); },
@@ -475,6 +507,7 @@
     toLobby() { send({ t: 'lobby' }); },
     botify(el) { send({ t: 'botify', index: +el.dataset.i }); },
     emote(el) { send({ t: 'emote', e: el.dataset.v }); },
+    mute() { Sound.setMuted(!Sound.isMuted()); keepInputs(); render(true); },
   };
   function doMove(move) { S.sel = { card: null, items: [] }; send({ t: 'move', move }); }
   function keepInputs() {
@@ -490,6 +523,7 @@
     }
     if (el.disabled) return;
     const f = act[el.dataset.act];
+    if (el.tagName === 'BUTTON' && !['mute', 'emote', 'capture', 'autoCapture', 'build', 'trail'].includes(el.dataset.act)) Sound.play('click');
     if (f) f(el, e);
   });
   document.addEventListener('change', (e) => {
